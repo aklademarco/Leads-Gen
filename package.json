@@ -1,0 +1,17 @@
+{
+  "name": "leads-gen",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Lead generation monorepo: React dashboard (apps/web) + Express/Postgres API (apps/server)",
+  "license": "ISC",
+  "author": "Marco",
+  "packageManager": "pnpm@11.28.11",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "dev:web": "pnpm --filter @leads-gen/web dev",
+    "dev:server": "pnpm --filter @leads-gen/server dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "start": "pnpm --filter @leads-gen/server start"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@leads-gen/server",
+  "private": true,
+  "version": "1.0.0",
+  "description": "A simple app to search for companies or startups without website using google places API.We will create website for those companies and pitch to them  ",
+  "license": "ISC",
+  "author": "Marco",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "axios": "^1.15.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
