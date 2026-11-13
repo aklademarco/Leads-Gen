@@ -54,13 +54,20 @@ router.get("/search", async (req, res) => {
           {
             params: {
               place_id: place.place_id,
+              // Must be comma-separated with NO spaces, otherwise Google
+              // returns INVALID_REQUEST and every field comes back empty.
               fields:
-                "website, formatted_phone_number, photos, opening_hours, user_ratings_total, international_phone_number",
+                "website,formatted_phone_number,photos,opening_hours,user_ratings_total,international_phone_number",
               key: process.env.GOOGLE_PLACES_API,
             },
           },
         );
 
+        if (details.data.status !== "OK") {
+          console.warn(
+            `Place details failed for ${place.place_id}: ${details.data.status} ${details.data.error_message || ""}`,
+          );
+        }
         const result = details.data.result || {};
         const website = result.website || null;
         return {
@@ -71,7 +78,11 @@ router.get("/search", async (req, res) => {
           reviewCount: place.user_ratings_total || null,
           phone: result.formatted_phone_number || null,
           internationalPhone: result.international_phone_number || null,
-          photo: result.photos?.[0]?.photo_reference || null,
+          // The business's own first photo on Google (storefront, logo, work…).
+          photo:
+            result.photos?.[0]?.photo_reference ||
+            place.photos?.[0]?.photo_reference ||
+            null,
           openNow: result.opening_hours?.open_now ?? null,
           website: website || null,
         };
@@ -104,9 +115,33 @@ router.get("/", async (req, res) => {
 
 router.get("/photo", async (req, res) => {
   const { ref } = req.query;
-  const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${ref}&key=${process.env.GOOGLE_PLACES_API}`;
-  const response = await axios.get(url, { responseType: "stream" });
-  response.data.pipe(res);
+  if (!ref || typeof ref !== "string") {
+    return res.status(400).json({ error: "ref is required" });
+  }
+  try {
+    const response = await apiClient.get(
+      "https://maps.googleapis.com/maps/api/place/photo",
+      {
+        params: {
+          maxwidth: 600,
+          photo_reference: ref,
+          key: process.env.GOOGLE_PLACES_API,
+        },
+        responseType: "stream",
+      },
+    );
+    res.set(
+      "Content-Type",
+      response.headers["content-type"] || "image/jpeg",
+    );
+    // Photos for a reference don't change; let the browser cache them
+    // so we don't pay for a Google photo request on every page load.
+    res.set("Cache-Control", "public, max-age=86400");
+    response.data.pipe(res);
+  } catch (error) {
+    console.error("Photo fetch failed:", error.message);
+    res.status(502).json({ error: "Could not load photo" });
+  }
 });
 
 router.patch("/:id", async (req, res) => {

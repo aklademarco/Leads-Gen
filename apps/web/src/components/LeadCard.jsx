@@ -1,10 +1,48 @@
-function getInitials(name) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
+import { useState } from "react";
+
+const API =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1/leads";
+
+function CompanyIcon() {
+  return (
+    <div className="w-full h-36 bg-[#0d1117] border-b border-[#1e2a35] flex items-center justify-center">
+      <div className="w-14 h-14 rounded-xl bg-[#141e28] border border-[#1e2a35] flex items-center justify-center text-[#4d6273]">
+        {/* building / storefront */}
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 21h18" />
+          <path d="M5 21V7l7-4 7 4v14" />
+          <path d="M9 9h1M14 9h1M9 13h1M14 13h1" />
+          <path d="M10 21v-4h4v4" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function LeadImage({ lead }) {
+  const [failed, setFailed] = useState(false);
+  if (!lead.photo || failed) return <CompanyIcon />;
+  return (
+    <div className="w-full h-36 overflow-hidden bg-[#0d1117] border-b border-[#1e2a35]">
+      <img
+        src={`${API}/photo?ref=${encodeURIComponent(lead.photo)}`}
+        alt={lead.name}
+        loading="lazy"
+        className="w-full h-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
 }
 
 function Stars({ rating, reviewCount }) {
@@ -45,9 +83,6 @@ const statusStyles = {
   closed: "bg-red-900/20 text-[#c07070] border border-red-900/30",
 };
 
-const API =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1/leads";
-
 export default function LeadCard({ lead, index, onUpdateStatus, onDelete }) {
   return (
     <div
@@ -59,26 +94,8 @@ export default function LeadCard({ lead, index, onUpdateStatus, onDelete }) {
     >
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent z-10" />
 
-      {/* Business Photo */}
-      {lead.photo ? (
-        <div className="w-full h-36 overflow-hidden">
-          <img
-            src={`${API}/photo?ref=${lead.photo}`}
-            alt={lead.name}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              e.target.style.display = "none";
-              e.target.parentElement.style.display = "none";
-            }}
-          />
-        </div>
-      ) : (
-        <div className="w-full h-24 bg-[#0d1117] border-b border-[#1e2a35] flex items-center justify-center">
-          <div className="w-12 h-12 rounded-xl bg-[#141e28] border border-[#1e2a35] flex items-center justify-center font-mono text-[16px] font-medium text-[#3d5060]">
-            {getInitials(lead.name)}
-          </div>
-        </div>
-      )}
+      {/* Business photo from Google, or a company icon if it has none */}
+      <LeadImage lead={lead} />
 
       <div className="p-4">
         {/* Header */}
