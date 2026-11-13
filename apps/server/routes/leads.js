@@ -7,36 +7,101 @@ const apiClient = axios.create({
   timeout: 10000, // 10 seconds timeout
 });
 
-router.get("/search", async (req, res) => {
-  const { type, location } = req.query;
+const DEFAULT_RADIUS = 5000;
+const MIN_RADIUS = 500;
+const MAX_RADIUS = 30000;
 
-  if (!type || !location) {
-    return res.status(400).json({ error: "type and location are required" });
+function parseRadius(value) {
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n)) return DEFAULT_RADIUS;
+  return Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, n));
+}
+
+// Location suggestions restricted to Ghana, for the location picker.
+router.get("/places/autocomplete", async (req, res) => {
+  const { input } = req.query;
+  const trimmed = typeof input === "string" ? input.trim() : "";
+  if (trimmed.length < 2 || trimmed.length > 100) {
+    return res.json({ predictions: [] });
   }
 
   try {
-    const geoResponse = await apiClient.get(
-      "https://maps.googleapis.com/maps/api/geocode/json",
+    const response = await apiClient.get(
+      "https://maps.googleapis.com/maps/api/place/autocomplete/json",
       {
         params: {
-          address: location,
+          input: trimmed,
+          components: "country:gh",
+          types: "geocode",
           key: process.env.GOOGLE_PLACES_API,
         },
       },
     );
 
-    if (!geoResponse.data.results.length) {
+    const { status, error_message: errorMessage } = response.data;
+    if (status !== "OK" && status !== "ZERO_RESULTS") {
+      console.error(
+        `Places autocomplete failed: ${status} ${errorMessage || ""}`,
+      );
+      return res
+        .status(502)
+        .json({ error: "Could not load location suggestions" });
+    }
+
+    const predictions = (response.data.predictions || []).map((p) => ({
+      placeId: p.place_id,
+      description: p.description,
+      mainText: p.structured_formatting?.main_text || p.description,
+      secondaryText: p.structured_formatting?.secondary_text || "",
+    }));
+
+    res.set("Cache-Control", "private, max-age=300");
+    res.json({ predictions });
+  } catch (error) {
+    console.error("Places autocomplete error:", error.message);
+    res.status(502).json({ error: "Could not load location suggestions" });
+  }
+});
+
+router.get("/search", async (req, res) => {
+  const { type, location, placeId } = req.query;
+  const radius = parseRadius(req.query.radius);
+
+  if (!type || (!location && !placeId)) {
+    return res
+      .status(400)
+      .json({ error: "type and location (or placeId) are required" });
+  }
+
+  try {
+    // A placeId (from autocomplete) is unambiguous; a free-text address is
+    // restricted to Ghana so it can't resolve to a same-named place abroad.
+    const geoParams = placeId
+      ? { place_id: String(placeId), key: process.env.GOOGLE_PLACES_API }
+      : {
+          address: String(location),
+          components: "country:GH",
+          key: process.env.GOOGLE_PLACES_API,
+        };
+
+    const geoResponse = await apiClient.get(
+      "https://maps.googleapis.com/maps/api/geocode/json",
+      { params: geoParams },
+    );
+
+    if (!geoResponse.data.results?.length) {
       return res.status(404).json({ error: "Location not found" });
     }
-    const coords = geoResponse.data.results[0].geometry.location;
-    const { lat, lng } = coords;
+    const geoResult = geoResponse.data.results[0];
+    const { lat, lng } = geoResult.geometry.location;
+    const resolvedLocation = geoResult.formatted_address || location || null;
 
     const placeResponse = await apiClient.get(
       "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
       {
         params: {
           location: `${lat},${lng}`,
-          radius: 5000,
+          radius,
           keyword: type,
           key: process.env.GOOGLE_PLACES_API,
         },
@@ -93,7 +158,11 @@ router.get("/search", async (req, res) => {
 
     const saved = await Lead.insertMany(leads);
 
-    res.json({ total: saved.length, leads: saved });
+    res.json({
+      total: saved.length,
+      location: resolvedLocation,
+      leads: saved,
+    });
   } catch (error) {
     console.error(error.message);
     res

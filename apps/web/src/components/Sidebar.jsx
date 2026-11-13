@@ -1,146 +1,183 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { CloseIcon, InboxIcon, SearchIcon } from "./icons";
+import { STATUSES, STATUS_META, formatCount } from "../lib/format";
 
-const TYPES = [
-  "restaurant",
-  "salon",
-  "pharmacy",
-  "hotel",
-  "supermarket",
-  "clinic",
-  "barbershop",
-  "bakery",
-  "school",
-  "gym",
-];
+function Mark() {
+  return (
+    <div className="flex size-7 items-center justify-center rounded-md bg-accent text-white">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M8 14s4.5-4 4.5-7.5a4.5 4.5 0 0 0-9 0C3.5 10 8 14 8 14z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <circle cx="8" cy="6.5" r="1.4" fill="currentColor" />
+      </svg>
+    </div>
+  );
+}
 
-export default function Sidebar({ leads, onSearch, view, setView }) {
-  const [type, setType] = useState("");
-  const [location, setLocation] = useState("");
+function NavItem({ icon, label, count, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-colors ${
+        active
+          ? "bg-rail-2 text-rail-text"
+          : "text-rail-muted hover:bg-rail-2/60 hover:text-rail-text"
+      }`}
+    >
+      {icon}
+      <span className="flex-1 text-left">{label}</span>
+      {count != null && (
+        <span className="font-mono text-[11px] tabular-nums text-rail-muted">
+          {formatCount(count)}
+        </span>
+      )}
+    </button>
+  );
+}
 
-  const stats = {
-    total: leads.length,
-    contacted: leads.filter((l) => l.status === "contacted").length,
-    interested: leads.filter((l) => l.status === "interested").length,
-    closed: leads.filter((l) => l.status === "closed").length,
-  };
+// st-new is too dark against the rail; lift it to the rail's muted tone.
+const railDot = (s) => (s === "new" ? "bg-rail-muted" : STATUS_META[s].dot);
+
+function Pipeline({ counts, activeStatus, onPick }) {
+  const total = STATUSES.reduce((n, s) => n + (counts[s] || 0), 0);
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between px-2.5">
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-rail-muted">
+          Pipeline
+        </h2>
+      </div>
+      <div
+        className="mx-2.5 mb-2.5 flex h-1 overflow-hidden rounded-full bg-rail-2"
+        role="img"
+        aria-label={STATUSES.map((s) => `${STATUS_META[s].label} ${counts[s] || 0}`).join(", ")}
+      >
+        {total > 0 &&
+          STATUSES.map((s) =>
+            counts[s] ? (
+              <span
+                key={s}
+                className={`${railDot(s)} h-full border-r border-rail last:border-r-0`}
+                style={{ width: `${(counts[s] / total) * 100}%` }}
+              />
+            ) : null,
+          )}
+      </div>
+      <ul className="space-y-px">
+        {STATUSES.map((s) => {
+          const active = activeStatus === s;
+          return (
+            <li key={s}>
+              <button
+                type="button"
+                onClick={() => onPick(s)}
+                aria-current={active ? "true" : undefined}
+                className={`flex h-7 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-colors ${
+                  active
+                    ? "bg-rail-2 text-rail-text"
+                    : "text-rail-muted hover:bg-rail-2/60 hover:text-rail-text"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 rounded-full ${railDot(s)}`}
+                />
+                <span className="flex-1 text-left">{STATUS_META[s].label}</span>
+                <span className="font-mono text-[11px] tabular-nums">
+                  {formatCount(counts[s])}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+export default function Sidebar({
+  view,
+  onNavigate,
+  counts,
+  activeStatus,
+  onPipeline,
+  open,
+  onClose,
+}) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   return (
-    <aside className="w-60 min-w-60 bg-[#0a0f16]/90 border-r border-[#1e2a35] flex flex-col backdrop-blur-md">
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-[#1e2a35] flex items-center gap-3">
-        <div className="w-7 h-7 bg-white rounded-md flex items-center justify-center">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="7" cy="7" r="3" fill="#000" />
-            <path
-              d="M7 1v2M7 11v2M1 7h2M11 7h2"
-              stroke="#000"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
-        <div>
-          <div className="font-mono text-[13px] font-medium tracking-wide">
-            LeadFind
+    <>
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-ink/40 lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        aria-label="Main navigation"
+        className={`fixed inset-y-0 left-0 z-50 flex w-[232px] shrink-0 flex-col overflow-y-auto border-r border-rail-line bg-rail transition-transform duration-200 lg:static lg:translate-x-0 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-14 shrink-0 items-center gap-2.5 px-4">
+          <Mark />
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="text-[14px] font-semibold tracking-tight text-rail-text">LeadFind</div>
+            <div className="text-[11px] text-rail-muted">Ghana prospecting</div>
           </div>
-          <div className="font-mono text-[9px] text-[#3d5060] tracking-widest">
-            Business Intelligence
-          </div>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="px-4 py-5 border-b border-[#1e2a35]">
-        <div className="font-mono text-[9px] tracking-widest text-[#3d5060] uppercase mb-3">
-          Search
-        </div>
-        <div className="mb-3">
-          <label className="text-[11px] text-[#7a8fa0] block mb-1">
-            Business Type
-          </label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="w-full bg-[#111820] border border-[#1e2a35] rounded-lg text-[#e8edf2] text-[12px] px-3 py-2 outline-none focus:border-[#243040] appearance-none"
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="inline-flex size-7 items-center justify-center rounded-md text-rail-muted hover:bg-rail-2 hover:text-rail-text lg:hidden"
           >
-            <option value="">Select type...</option>
-            {TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
-          </select>
+            <CloseIcon />
+          </button>
         </div>
-        <div className="mb-3">
-          <label className="text-[11px] text-[#7a8fa0] block mb-1">
-            Location
-          </label>
-          <input
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSearch(type, location)}
-            placeholder="e.g. Kumasi, Accra"
-            className="w-full bg-[#111820] border border-[#1e2a35] rounded-lg text-[#e8edf2] text-[12px] px-3 py-2 outline-none focus:border-[#243040] placeholder-[#3d5060]"
+
+        <nav className="space-y-px px-2 pt-2">
+          <NavItem
+            icon={<SearchIcon />}
+            label="Search"
+            active={view === "search"}
+            onClick={() => onNavigate("search")}
+          />
+          <NavItem
+            icon={<InboxIcon />}
+            label="All leads"
+            count={counts.all}
+            active={view === "all" && activeStatus === "all"}
+            onClick={() => onNavigate("all")}
+          />
+        </nav>
+
+        <div className="mx-4 my-4 h-px bg-rail-line" />
+
+        <div className="px-2">
+          <Pipeline
+            counts={counts}
+            activeStatus={view === "all" ? activeStatus : null}
+            onPick={onPipeline}
           />
         </div>
-        <button
-          onClick={() => onSearch(type, location)}
-          className="w-full bg-white text-black rounded-lg py-2 text-[12px] font-medium hover:bg-[#e0e8f0] transition-all active:scale-95"
-        >
-          Search Businesses
-        </button>
-      </div>
 
-      {/* Stats */}
-      <div className="px-4 py-4 border-b border-[#1e2a35]">
-        <div className="font-mono text-[9px] tracking-widest text-[#3d5060] uppercase mb-3">
-          Overview
+        <div className="mt-auto border-t border-rail-line px-4 py-3 text-[11px] leading-relaxed text-rail-muted">
+          Data from Google Places
         </div>
-        {[
-          ["Total leads", stats.total],
-          ["Contacted", stats.contacted],
-          ["Interested", stats.interested],
-          ["Closed", stats.closed],
-        ].map(([label, val]) => (
-          <div key={label} className="flex justify-between items-center mb-2">
-            <span className="text-[11px] text-[#7a8fa0]">{label}</span>
-            <span className="font-mono text-[12px] text-[#e8edf2]">
-              {val || "—"}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Nav */}
-      <div className="px-3 py-3 mt-auto border-t border-[#1e2a35]">
-        {[
-          { label: "All Leads", key: "all" },
-          { label: "Search Results", key: "search" },
-        ].map((item) => (
-          <div
-            key={item.key}
-            onClick={() => setView(item.key)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] cursor-pointer transition-all ${
-              view === item.key
-                ? "bg-[#111820] text-[#e8edf2]"
-                : "text-[#7a8fa0] hover:bg-[#111820] hover:text-[#e8edf2]"
-            }`}
-          >
-            <div
-              className={`w-1.5 h-1.5 rounded-full ${
-                view === item.key ? "bg-white" : "bg-[#3d5060]"
-              }`}
-            />
-            {item.label}
-            {item.key === "all" && leads.length > 0 && (
-              <span className="ml-auto font-mono text-[10px] text-[#3d5060]">
-                {leads.length}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
