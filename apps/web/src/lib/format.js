@@ -1,5 +1,10 @@
+// VITE_API_BASE_URL wins when set. Otherwise: local server in dev, the
+// deployed Vercel API in production builds.
 export const API =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1/leads";
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV
+    ? "http://localhost:5000/api/v1/leads"
+    : "https://leads-gen-server-nine.vercel.app/api/v1/leads");
 
 export const STATUSES = ["new", "contacted", "interested", "closed"];
 

@@ -5,9 +5,7 @@ import {
   toLabel,
   toQuery,
 } from "../data/ghanaPlaces";
-
-const API =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1/leads";
+import { API } from "../lib/format";
 
 const DEBOUNCE_MS = 250;
 const MAX_LOCAL_MATCHES = 40;
