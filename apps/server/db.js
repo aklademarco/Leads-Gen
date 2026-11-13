@@ -32,6 +32,32 @@ const connectDB = async () => {
       );
       CREATE INDEX IF NOT EXISTS leads_created_at_idx ON leads (created_at DESC);
     `);
+
+    // One Google place = one lead. Older versions saved a fresh copy on every
+    // search, so collapse existing duplicates before enforcing uniqueness.
+    // Keep the copy that has been worked on (status moved on, or has notes),
+    // otherwise the oldest one.
+    const { rowCount: removed } = await pool.query(`
+      DELETE FROM leads
+       WHERE id IN (
+         SELECT id FROM (
+           SELECT id,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY place_id
+                    ORDER BY (status <> 'new') DESC,
+                             (notes <> '') DESC,
+                             created_at ASC
+                  ) AS rn
+             FROM leads
+            WHERE place_id IS NOT NULL
+         ) ranked
+         WHERE rn > 1
+       );
+    `);
+    if (removed) console.log(`Removed ${removed} duplicate lead(s)`);
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS leads_place_id_key ON leads (place_id);`,
+    );
     console.log("PostgreSQL (Neon) connected");
   } catch (error) {
     console.error("PostgreSQL connection failed", error.message);

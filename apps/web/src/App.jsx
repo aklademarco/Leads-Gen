@@ -164,10 +164,14 @@ export default function App() {
       setResults(found);
       setSearchState("done");
       setLastSearch({ type: t, location: loc, radius: r, resolved: res.data.location || null });
+      // Already-saved businesses come back with the same _id (and refreshed
+      // Google data), so update those in place and append only new ones.
       setAllLeads((prev) => {
+        const byId = new Map(found.map((l) => [l._id, l]));
+        const merged = prev.map((l) => byId.get(l._id) || l);
         const ids = new Set(prev.map((l) => l._id));
         const fresh = found.filter((l) => !ids.has(l._id));
-        return fresh.length ? [...prev, ...fresh] : prev;
+        return [...fresh, ...merged];
       });
       setRecent((prev) => {
         const entry = { type: t, location: loc, radius: r };
@@ -175,9 +179,12 @@ export default function App() {
         writeStorage(RECENT_KEY, next);
         return next;
       });
+      const newCount = res.data.newCount ?? found.length;
+      const known = found.length - newCount;
       toast(
         found.length
-          ? `Found ${found.length} ${found.length === 1 ? "business" : "businesses"} without a website`
+          ? `Found ${found.length} ${found.length === 1 ? "business" : "businesses"} without a website` +
+              (known > 0 ? ` · ${newCount} new, ${known} already saved` : "")
           : "No businesses without a website found",
       );
     } catch (err) {

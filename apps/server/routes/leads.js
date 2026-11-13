@@ -156,10 +156,11 @@ router.get("/search", async (req, res) => {
 
     const leads = detailed.filter((place) => !place.website);
 
-    const saved = await Lead.insertMany(leads);
+    const saved = await Lead.upsertMany(leads);
 
     res.json({
       total: saved.length,
+      newCount: saved.filter((lead) => lead.isNew).length,
       location: resolvedLocation,
       leads: saved,
     });

@@ -25,11 +25,23 @@ const COLUMNS = `
 
 const isValidId = (id) => UUID_RE.test(id);
 
-const insertMany = async (leads) => {
-  if (!leads.length) return [];
+// Saves search results, one row per Google place. A business that is already
+// saved gets its Google data refreshed but keeps its status, notes and
+// created_at, so repeating a search never creates duplicates.
+// Each returned row has `isNew` (true if it was inserted by this call).
+const upsertMany = async (leads) => {
+  // Drop repeats within the batch: ON CONFLICT can't touch a row twice.
+  const seen = new Set();
+  const unique = leads.filter((lead) => {
+    if (!lead.placeId) return true;
+    if (seen.has(lead.placeId)) return false;
+    seen.add(lead.placeId);
+    return true;
+  });
+  if (!unique.length) return [];
 
   const values = [];
-  const rows = leads.map((lead, i) => {
+  const rows = unique.map((lead, i) => {
     const base = i * 9;
     values.push(
       lead.name,
@@ -49,7 +61,15 @@ const insertMany = async (leads) => {
     `INSERT INTO leads
        (name, address, place_id, rating, phone, photo, review_count, open_now, website)
      VALUES ${rows.join(", ")}
-     RETURNING ${COLUMNS}`,
+     ON CONFLICT (place_id) DO UPDATE SET
+       name         = EXCLUDED.name,
+       address      = COALESCE(EXCLUDED.address, leads.address),
+       rating       = COALESCE(EXCLUDED.rating, leads.rating),
+       phone        = COALESCE(EXCLUDED.phone, leads.phone),
+       photo        = COALESCE(EXCLUDED.photo, leads.photo),
+       review_count = COALESCE(EXCLUDED.review_count, leads.review_count),
+       open_now     = EXCLUDED.open_now
+     RETURNING ${COLUMNS}, (xmax = 0) AS "isNew"`,
     values,
   );
   return saved;
@@ -85,4 +105,4 @@ const deleteById = async (id) => {
   return rows[0] || null;
 };
 
-module.exports = { STATUSES, insertMany, findAll, updateById, deleteById };
+module.exports = { STATUSES, upsertMany, findAll, updateById, deleteById };
