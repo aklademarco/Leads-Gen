@@ -60,9 +60,23 @@ const connectDB = async () => {
     );
     console.log("PostgreSQL (Neon) connected");
   } catch (error) {
-    console.error("PostgreSQL connection failed", error.message);
-    process.exit(1);
+    console.error("PostgreSQL connection failed", error.message || error.code);
+    throw error;
   }
 };
 
-module.exports = { pool, connectDB };
+// Runs the schema setup once per process (or per serverless instance) and
+// lets requests wait for it. A failed attempt is retried on the next request
+// instead of killing the process, which matters on Vercel.
+let ready = null;
+const ensureDB = () => {
+  if (!ready) {
+    ready = connectDB().catch((error) => {
+      ready = null;
+      throw error;
+    });
+  }
+  return ready;
+};
+
+module.exports = { pool, connectDB, ensureDB };
